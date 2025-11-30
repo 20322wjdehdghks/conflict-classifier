@@ -25,7 +25,7 @@ h1 { color: #1E88E5; text-align: center; font-weight: bold; }
 """, unsafe_allow_html=True)
 
 # --- 3. 모델 로드 ---
-model_path = 'model.pkl'  # 학습 완료 Fastai 모델 파일
+model_path = 'model.pkl'
 try:
     if os.path.exists(model_path):
         learner = load_learner(model_path, cpu=True)
@@ -33,6 +33,7 @@ try:
         st.success("✅ 모델 로드 완료!")
     else:
         learner = None
+        # 국제 분쟁 4가지 라벨 고정
         labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
         st.warning("⚠️ 모델 파일이 없습니다. 더미 출력으로 실행됩니다.")
 except Exception as e:
@@ -68,14 +69,12 @@ if uploaded_file:
         img = PILImage.create(pil_img)
         prediction, pred_idx, probs = learner.predict(img)
     else:
-        # 더미 예측
-        np.random.seed(42)
-        probs = np.random.rand(len(labels))
-        probs = probs / probs.sum()
+        # 모델 없으면 항상 국제 분쟁 라벨 랜덤 확률
+        probs = np.array([0.25, 0.25, 0.25, 0.25])  # 균등
         pred_idx = np.argmax(probs)
         prediction = labels[pred_idx]
 
-    confidence = float(probs[pred_idx])*100
+    confidence = float(probs[pred_idx]*100)
 
     with col1:
         st.markdown(f"""
