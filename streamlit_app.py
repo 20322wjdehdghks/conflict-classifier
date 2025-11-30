@@ -1,15 +1,14 @@
 # streamlit_app.py
 import streamlit as st
+from fastai.vision.all import load_learner, PILImage
 from PIL import Image, ImageOps
 import numpy as np
+import os
 
-# --- 1. 페이지 기본 설정 ---
-st.set_page_config(
-    page_title="Fastai 이미지 분류기 (데모)",
-    page_icon="🤖",
-)
+# --- 1. 페이지 설정 ---
+st.set_page_config(page_title="국제 분쟁 이미지 분류 AI", page_icon="🤖")
 
-# --- 2. 커스텀 CSS ---
+# --- 2. CSS ---
 st.markdown("""
 <style>
 h1 { color: #1E88E5; text-align: center; font-weight: bold; }
@@ -25,28 +24,38 @@ h1 { color: #1E88E5; text-align: center; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. 라벨 정의 ---
-labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
+# --- 3. 모델 로드 ---
+model_path = 'model.pkl'  # 학습 완료 Fastai 모델 파일
+try:
+    if os.path.exists(model_path):
+        learner = load_learner(model_path, cpu=True)
+        labels = learner.dls.vocab
+        st.success("✅ 모델 로드 완료!")
+    else:
+        learner = None
+        labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
+        st.warning("⚠️ 모델 파일이 없습니다. 더미 출력으로 실행됩니다.")
+except Exception as e:
+    learner = None
+    labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
+    st.warning(f"⚠️ 모델 로드 실패: {e}\n더미 출력으로 실행됩니다.")
 
-st.title("이미지 분류기 (데모)")
+# --- 4. 타이틀 ---
+st.title("국제 분쟁 이미지 분류 AI")
 st.write(f"**분류 가능한 항목:** `{', '.join(labels)}`")
 st.markdown("---")
 
-# --- 4. 이미지 업로드 ---
-uploaded_file = st.file_uploader(
-    "분류할 이미지를 업로드하세요 (jpg, png, jpeg, webp, tiff)",
-    type=["jpg", "png", "jpeg", "webp", "tiff"]
-)
+# --- 5. 이미지 업로드 ---
+uploaded_file = st.file_uploader("분류할 이미지를 업로드하세요", type=["jpg","png","jpeg","webp","tiff"])
 
-if uploaded_file is not None:
-    col1, col2 = st.columns([1, 1])
+if uploaded_file:
+    col1, col2 = st.columns([1,1])
 
-    # 이미지 로드
+    # 이미지 로드 및 EXIF 처리
     try:
         pil_img = Image.open(uploaded_file)
         pil_img = ImageOps.exif_transpose(pil_img)
-        if pil_img.mode != "RGB":
-            pil_img = pil_img.convert("RGB")
+        if pil_img.mode != "RGB": pil_img = pil_img.convert("RGB")
     except Exception as e:
         st.error(f"이미지 처리 오류: {e}")
         st.stop()
@@ -54,37 +63,39 @@ if uploaded_file is not None:
     with col1:
         st.image(pil_img, caption="업로드된 이미지", use_container_width=True)
 
-    # --- 5. 더미 예측 ---
-    np.random.seed(42)  # 항상 동일한 예측 가능
-    probs = np.random.rand(len(labels))
-    probs = probs / probs.sum()  # 합 = 1
-    pred_idx = np.argmax(probs)
-    prediction = labels[pred_idx]
+    # --- 6. 예측 ---
+    if learner:
+        img = PILImage.create(pil_img)
+        prediction, pred_idx, probs = learner.predict(img)
+    else:
+        # 더미 예측
+        np.random.seed(42)
+        probs = np.random.rand(len(labels))
+        probs = probs / probs.sum()
+        pred_idx = np.argmax(probs)
+        prediction = labels[pred_idx]
+
+    confidence = float(probs[pred_idx])*100
 
     with col1:
         st.markdown(f"""
         <div class="prediction-box">
-            <span style="font-size: 1.0rem; color: #555;">예측 결과:</span>
-            <h2>{prediction}</h2>
+            <span style="font-size:1.0rem;color:#555;">예측 결과:</span>
+            <h2>{prediction} ({confidence:.2f}%)</h2>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
         st.markdown("<h3>상세 예측 확률:</h3>", unsafe_allow_html=True)
-        prob_list = sorted(
-            [(lbl, float(probs[i])) for i, lbl in enumerate(labels)],
-            key=lambda x: x[1],
-            reverse=True
-        )
-
+        prob_list = sorted([(lbl,float(probs[i])) for i,lbl in enumerate(labels)], key=lambda x:x[1], reverse=True)
         for label, prob in prob_list:
-            highlight_class = "highlight" if label == prediction else ""
-            prob_percent = prob * 100
+            highlight_class = "highlight" if label==prediction else ""
+            prob_percent = prob*100
             st.markdown(f"""
             <div class="prob-card">
                 <span class="prob-label">{label}</span>
                 <div class="prob-bar-bg">
-                    <div class="prob-bar-fg {highlight_class}" style="width: {prob_percent:.4f}%;">{prob_percent:.2f}%</div>
+                    <div class="prob-bar-fg {highlight_class}" style="width:{prob_percent:.4f}%;">{prob_percent:.2f}%</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
