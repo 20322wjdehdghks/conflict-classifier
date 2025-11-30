@@ -19,7 +19,7 @@ labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
 st.title("국제 분쟁 이미지 분류 AI")
 st.write("국제 분쟁 이미지를 업로드하면 AI가 유형을 예측합니다.")
 
-uploaded_file = st.file_uploader("이미지를 업로드하세요", type=['jpg','png','jpeg'])
+uploaded_file = st.file_uploader("https://www.shutterstock.com/image-photo/conflicts-between-united-states-ukraine-260nw-2528048269.jpg", type=['jpg','png','jpeg'])
 
 if uploaded_file is not None:
     img = image.load_img(uploaded_file, target_size=(224,224))
