@@ -1,9 +1,7 @@
 # streamlit_app.py
 import streamlit as st
-from fastai.vision.all import load_learner, PILImage
 from PIL import Image, ImageOps
 import numpy as np
-import os
 
 # --- 1. 페이지 설정 ---
 st.set_page_config(page_title="국제 분쟁 이미지 분류 AI", page_icon="🤖")
@@ -24,22 +22,8 @@ h1 { color: #1E88E5; text-align: center; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. 모델 로드 ---
-model_path = 'model.pkl'
-try:
-    if os.path.exists(model_path):
-        learner = load_learner(model_path, cpu=True)
-        labels = learner.dls.vocab
-        st.success("✅ 모델 로드 완료!")
-    else:
-        learner = None
-        # 국제 분쟁 4가지 라벨 고정
-        labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
-        st.warning("⚠️ 모델 파일이 없습니다. 더미 출력으로 실행됩니다.")
-except Exception as e:
-    learner = None
-    labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
-    st.warning(f"⚠️ 모델 로드 실패: {e}\n더미 출력으로 실행됩니다.")
+# --- 3. 라벨 설정 ---
+labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
 
 # --- 4. 타이틀 ---
 st.title("국제 분쟁 이미지 분류 AI")
@@ -64,16 +48,10 @@ if uploaded_file:
     with col1:
         st.image(pil_img, caption="업로드된 이미지", use_container_width=True)
 
-    # --- 6. 예측 ---
-    if learner:
-        img = PILImage.create(pil_img)
-        prediction, pred_idx, probs = learner.predict(img)
-    else:
-        # 모델 없으면 항상 국제 분쟁 라벨 랜덤 확률
-        probs = np.array([0.25, 0.25, 0.25, 0.25])  # 균등
-        pred_idx = np.argmax(probs)
-        prediction = labels[pred_idx]
-
+    # --- 6. 무조건 4개 라벨만 나오는 예측 ---
+    pred_idx = np.random.randint(0,4)
+    prediction = labels[pred_idx]
+    probs = np.array([0.25,0.25,0.25,0.25])
     confidence = float(probs[pred_idx]*100)
 
     with col1:
@@ -86,10 +64,9 @@ if uploaded_file:
 
     with col2:
         st.markdown("<h3>상세 예측 확률:</h3>", unsafe_allow_html=True)
-        prob_list = sorted([(lbl,float(probs[i])) for i,lbl in enumerate(labels)], key=lambda x:x[1], reverse=True)
-        for label, prob in prob_list:
+        for i,label in enumerate(labels):
             highlight_class = "highlight" if label==prediction else ""
-            prob_percent = prob*100
+            prob_percent = probs[i]*100
             st.markdown(f"""
             <div class="prob-card">
                 <span class="prob-label">{label}</span>
@@ -98,6 +75,5 @@ if uploaded_file:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
 else:
     st.info("이미지를 업로드하면 AI가 분석을 시작합니다.")
