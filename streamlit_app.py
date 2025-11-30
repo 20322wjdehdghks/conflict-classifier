@@ -1,36 +1,93 @@
+# streamlit_app.py
 import streamlit as st
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
+from PIL import Image, ImageOps
 import numpy as np
 
-# ----------------------
-# 1. 모델 로드
-# ----------------------
-@st.cache_resource
-def load_conflict_model():
-    return load_model('conflict_classifier.h5')
+# --- 1. 페이지 기본 설정 ---
+st.set_page_config(
+    page_title="Fastai 이미지 분류기 (데모)",
+    page_icon="🤖",
+)
 
-model = load_conflict_model()
+# --- 2. 커스텀 CSS ---
+st.markdown("""
+<style>
+h1 { color: #1E88E5; text-align: center; font-weight: bold; }
+.stFileUploader { border: 2px dashed #1E88E5; border-radius: 10px; padding: 15px; background-color: #f5fafe; }
+.prediction-box { background-color: #E3F2FD; border: 2px solid #1E88E5; border-radius: 10px; padding: 25px; text-align: center; margin: 20px 0; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+.prediction-box h2 { color: #0D47A1; margin: 0; font-size: 2.0rem; }
+.prob-card { background-color: #FFFFFF; border-radius: 8px; padding: 15px; margin: 10px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: transform 0.2s ease; }
+.prob-card:hover { transform: translateY(-3px); }
+.prob-label { font-weight: bold; font-size: 1.05rem; color: #333; }
+.prob-bar-bg { background-color: #E0E0E0; border-radius: 5px; width: 100%; height: 22px; overflow: hidden; }
+.prob-bar-fg { background-color: #4CAF50; height: 100%; border-radius: 5px 0 0 5px; text-align: right; padding-right: 8px; color: white; font-weight: bold; line-height: 22px; transition: width 0.5s ease-in-out; }
+.prob-bar-fg.highlight { background-color: #FF6F00; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- 3. 라벨 정의 ---
 labels = ['civil_war', 'international_war', 'protest', 'peace_meeting']
 
-# ----------------------
-# 2. 앱 UI
-# ----------------------
-st.title("국제 분쟁 이미지 분류 AI")
-st.write("국제 분쟁 이미지를 업로드하면 AI가 유형을 예측합니다.")
+st.title("이미지 분류기 (데모)")
+st.write(f"**분류 가능한 항목:** `{', '.join(labels)}`")
+st.markdown("---")
 
-uploaded_file = st.file_uploader("https://www.shutterstock.com/image-photo/conflicts-between-united-states-ukraine-260nw-2528048269.jpg", type=['jpg','png','jpeg'])
+# --- 4. 이미지 업로드 ---
+uploaded_file = st.file_uploader(
+    "분류할 이미지를 업로드하세요 (jpg, png, jpeg, webp, tiff)",
+    type=["jpg", "png", "jpeg", "webp", "tiff"]
+)
 
 if uploaded_file is not None:
-    img = image.load_img(uploaded_file, target_size=(224,224))
-    img_array = image.img_to_array(img)/255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    col1, col2 = st.columns([1, 1])
 
-    # ----------------------
-    # 3. 예측
-    # ----------------------
-    prediction = model.predict(img_array)
-    predicted_label = labels[np.argmax(prediction)]
-    confidence = np.max(prediction) * 100
+    # 이미지 로드
+    try:
+        pil_img = Image.open(uploaded_file)
+        pil_img = ImageOps.exif_transpose(pil_img)
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+    except Exception as e:
+        st.error(f"이미지 처리 오류: {e}")
+        st.stop()
 
-    st.image(img, caption=f"예측된 분쟁 유형: {predicted_label} ({confidence:.2f}%)", use_column_width=True)
+    with col1:
+        st.image(pil_img, caption="업로드된 이미지", use_container_width=True)
+
+    # --- 5. 더미 예측 ---
+    np.random.seed(42)  # 항상 동일한 예측 가능
+    probs = np.random.rand(len(labels))
+    probs = probs / probs.sum()  # 합 = 1
+    pred_idx = np.argmax(probs)
+    prediction = labels[pred_idx]
+
+    with col1:
+        st.markdown(f"""
+        <div class="prediction-box">
+            <span style="font-size: 1.0rem; color: #555;">예측 결과:</span>
+            <h2>{prediction}</h2>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("<h3>상세 예측 확률:</h3>", unsafe_allow_html=True)
+        prob_list = sorted(
+            [(lbl, float(probs[i])) for i, lbl in enumerate(labels)],
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        for label, prob in prob_list:
+            highlight_class = "highlight" if label == prediction else ""
+            prob_percent = prob * 100
+            st.markdown(f"""
+            <div class="prob-card">
+                <span class="prob-label">{label}</span>
+                <div class="prob-bar-bg">
+                    <div class="prob-bar-fg {highlight_class}" style="width: {prob_percent:.4f}%;">{prob_percent:.2f}%</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+else:
+    st.info("이미지를 업로드하면 AI가 분석을 시작합니다.")
